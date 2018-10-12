@@ -1,5 +1,5 @@
 // Disclaimers and warnings
-// ------------------------
+// ========================
 // Obviously, this file is no substitute for the paper itself:
 // https://www.microsoft.com/en-us/research/uploads/prod/2018/03/build-systems.pdf
 // There is also an awesome talk (as always :D) by SPJ on YouTube:
@@ -8,16 +8,31 @@
 // Unlike the code in the paper, the code given below
 // (a) Doesn't compile.
 // (b) May never compile (ignoring syntax) without substantial changes
-// to the Rust type system.
+//     to the Rust type system.[FN1]
 //
+// Stuff marked with {Comment} is additional commentary provided by me.
+// It is primarily written for stuff that may seem weird for non-Haskell folks.
+// Don't worry though, there is no monad tutorial here. :)
+//
+// If you have trouble understanding something and/or concrete suggestions to
+// improve the translation, please open an issue on the GitHub issue tracker!
+//
+// [FN1]: I'm not complaining here, please do not misinterpret it as such.
+//
+// For Haskellers:
+// ---------------
 // This translation is not term to term, and the types don't make sense
 // sometimes (e.g. <$> and <*> are elided in places); don't kill me.
-// I've tried to do my best here.
-// However, if _you_ complain about not following Rust's casing/formatting
-// conventions, I will most certainly send you a glitter bomb.
+// I've tried to do my best here. Also, you're surely better off reading the
+// paper directly; all the extra brackets here may make your head hurt.
+//
+// For Rustaceans:
+// ---------------
+// If you complain about not following Rust's casing/formatting conventions,
+// I will almost surely send you a glitter bomb.
 //
 // Differences from ordinary Rust
-// ------------------------------
+// ==============================
 // 1. To reduce visual noise, fully uppercase identifiers are uniformly treated
 //    as generic parameters (they are not introduced into scope explicitly unless
 //    they have trait constraints).
@@ -32,9 +47,18 @@
 // 3. Type parameters are curried Foo<T, S> = Foo<T><S>.
 //    e.g. we can say that Vec (not Vec<T>) is a "mappable container".
 //
-// 4. Record definition uses an `=` sign instead of `:`
+// 4. Struct/Record definition uses an `=` sign instead of `:`
 //    e.g. { x = 10, y = 20 } instead of { x : 10, y : 10 }
 
+
+// Before we begin, let's pause for a haiku -
+//
+// In this world
+// We walk on the roof of hell
+// Gazing at flowers
+//
+// - Kobayashi Issa
+//
 //------------------------------------------------------------------------------
 
 // Fig 5. Code on 79:5
@@ -89,22 +113,22 @@ fn getHash<V: Hashable>(searchKey : K, mystore : Store<I, K, V>) -> Hash<V>
 // type Tasks c k v = k -> Maybe ( Task c k v)
 //
 // --------
-// (Rust actually uses just "for" but I think "forall" is clearer.)
+// {Comment} (Rust actually uses just "for" but I think "forall" is clearer.)
 //
 // C = Constraint, (and K = Key, V = Value as earlier)
 //
 // The parameter C should be thought of as some trait constraint describing what
 // kind of build system we're interested in.
 //
-// Since runTask works for all choices of F, we can pick F (by supplying the
-// argument to runTask which has type Fn(K) -> F<V>) depending on what kind
+// Since `run` works for all choices of F, we can pick F (by supplying the
+// argument to `run` which has type Fn(K) -> F<V>) depending on what kind
 // of build output we want. For example, there are choices for F which can:
 // 1. Be used to just list dependencies (no actual build).
 // 2. Be used to actually build things (doing IO).
 //
 // See Section 3.2-3.4 in the paper for more details on C and F.
-struct Task<C, K, V> = Task {
-    runTask : forall<F> Fn<F: C>(Fn(K) -> F<V>) -> F<V>,
+struct Task<C, K, V> {
+    run : forall<F> Fn<F: C>(Fn(K) -> F<V>) -> F<V>,
 };
 
 // Input keys are associated with None (because there is nothing to build,
@@ -141,7 +165,7 @@ trait Functor<F> {
 }
 trait Applicative<F> {
     fn pure(val: A) -> F<A>;
-    // Notice that the function is "inside F" here, compared to map.
+    // Notice that the function (first argument) is "inside F" here, unlike map.
     // Named version of (<*>)
     fn apply(f: F<Fn(A) -> B>, val: F<A>) -> F<B>;
 }
@@ -158,12 +182,12 @@ trait Applicative<F> {
 // runState :: State s a -> s -> (a, s)
 // execState :: State s a -> s -> s
 
-// May be loosely thought of as a pair of values, one of type S ("mutable" state)
-// and A (type of whatever value is captured). You might be wondering why we
-// have all these small functions to do simple things instead of "just"
-// working with a tuple. Well, the answer is that the Haskell implementation
-// of State is _not_ actually a pair, and these functions define an interface
-// through which we can interact with values of type A wrapped inside State<S, A>
+// {Comment} May be loosely thought of as a pair of values, one of type S ("mutable"
+// state) and another of type A (type of whatever value is captured).
+// You might be wondering why we have all these small functions to do simple
+// things instead of "just" working with a tuple. Well, the answer is that the
+// State is _not_ actually a pair (otherwise, runState and execState wouldn't make
+// much sense), but a function of type Fn(S) -> (S, A).
 struct State<S, A>; // Definition skipped.
 fn get() -> State<S, S>;
 fn gets(f: Fn(S) -> A) -> State<S, A>;
@@ -182,7 +206,7 @@ fn execState(val: State<S, A>, startState: S) ->     S
 // -- mempty is the identity of the monoid m
 // Const x <*> Const y = Const (x <> y) -- <> is the binary operation of the monoid m
 
-// This one may seem weird but it is needed as can't make a Functor out of
+// {Comment} This one may seem weird but it is needed as can't make a Functor out of
 // "nothing". Whereas now that we have a singleton container, Identity can
 // implement the Functor/Applicative/Monad traits (definitions elided).
 struct Identity<A> { runIdentity : A }
@@ -206,7 +230,7 @@ impl Applicative<Const<M: Monoid>> {
 
 // Repeated definitions from earlier.
 
-struct Task<C, K, V> = Task {
+struct Task<C, K, V> {
     runTask : forall<F> Fn<F: C>(Fn(K) -> F<V>) -> F<V>,
 };
 type Tasks<C, K, V> = Fn(K) -> Option<Task<C, K, V>>
@@ -218,11 +242,11 @@ type Tasks<C, K, V> = Fn(K) -> Option<Task<C, K, V>>
 // sprsh1   "B1" = Just $ Task $ \fetch -> ((+) <$> fetch "A1" <*> fetch "A2")
 // sprsh1   "B2" = Just $ Task $ \fetch -> ((*2) <$> fetch "B1")
 // sprsh1   _ = Nothing
-let spreadsheet1 : Tasks<Applicative, String, Integer> =
+let spreadsheet1 : Tasks<Applicative, String, BigInt> =
     cellname => {
         match cellname {
-            "B1" => Some(Task(fetch => fetch("A1") + fetch("A2"))),
-            "B2" => Some(Task(fetch => fetch("B1") * 2)),
+            "B1" => Some(Task{fetch => fetch("A1") + fetch("A2")}),
+            "B2" => Some(Task{fetch => fetch("B1") * 2}),
             _    => None,
         }
     };
@@ -252,21 +276,23 @@ type Build<C, I, K, V> = Fn(Tasks<C, K, V>, K, Store<I, K, V>) -> Store<I, K, V>
 //     fetch k = case tasks k of
 //       Nothing -> gets (getValue k)
 //       Just task -> do v <- run task fetch; modify (putValue k v); return v
-let fetch : Fn(K) -> State<Store<(), K, V>, V> =
-    k => match tasks k {
-        None => {
-            let valGetter: Fn(Store<(), K, V>) -> V = (store => getValue(k, store));
-            return gets(valGetter);
-        }
-        Some(task) -> {
-            let v: V = run(task, fetch); // <-- Recursive call
-            modify(putValue(k, v));
-            return v;
-        }
-    };
 let busy : Build<Applicative, (), K: Eq, V> =
-    (tasks, key, store) => execState(fetch(key), store)
-
+    (tasks, key, store) => {
+        let fetch: Fn(K) -> State<Store<(), K, V>, V> =
+            k => match tasks(k) {
+                None => {
+                    let valGetter: Fn(Store<(), K, V>) -> V =
+                        store => getValue(k, store);
+                    return gets(valGetter);
+                },
+                Some(task) => {
+                    let v: V = task.run(fetch); // <-- Recursive call
+                    modify(store => putValue(k, v, store));
+                    return v;
+                }
+            };
+        return execState(fetch(key), store);
+    }
 // Spreadsheet example (same as earlier)
 //  A1: 10  B1: A1 + A2
 //  A2: 20  B2: B1 * 2
@@ -278,9 +304,299 @@ let busy : Build<Applicative, (), K: Eq, V> =
 // 30
 // λ> getValue "B2" result
 // 60
-// >>> store = initialise((), key => if key == "A1" then 10 else 20)
-// >>> result = busy(spreadsheet1, "B2", store)
-// >>> getValue("B1", result)
-// 30
-// >>> getValue("B2", result)
-// 60
+//
+>>> store = initialise((), key => if key == "A1" then 10 else 20)
+>>> result = busy(spreadsheet1, "B2", store)
+>>> getValue("B1", result)
+30
+>>> getValue("B2", result)
+60
+
+// Spreadsheet example (new)
+//
+// A1: 10   B1: IF(C1=1,B2,A2)   C1:1
+// A2: 20   B2: IF(C1=1,A1,B1)
+//
+// Code on 79:10
+// sprsh2 :: Tasks Monad String Integer
+// sprsh2 "B1" = Just $ Task $ \fetch -> do
+//     c1 <- fetch "C1"
+//     if c1 == 1 then fetch "B2" else fetch "A2"
+// sprsh2 "B2" = Just $ Task $ \fetch -> do
+//     c2 <- fetch "C1"
+//     if c1 == 1 then fetch "A1" else fetch "B1"
+// sprsh2 _ = Nothing
+let spreadsheet2 : Tasks<Monad, String, BigInt> =
+    cellname => match cellname {
+        "B1" => Some(Task{
+            fetch => {
+                let c1 = fetch("C1");
+                if c1 == 1 { return fetch("B2"); } else { return fetch("A2"); }
+            }
+        }),
+        "B2" => Some(Task{
+            fetch => {
+                let c1 = fetch("C2");
+                if c1 == 1 { return fetch("A1"); } else { return fetch("B1"); }
+            }
+        }),
+        _ => Nothing
+    };
+
+// Code on 79:11
+// compute :: Task Monad k v -> Store i k v -> v
+// compute task store = runIdentity $ run task (\k -> Identity (getValue k store))
+fn compute(task : Task<Monad, K, V>, store : Store<I, K, V>) -> V {
+    // Recall task is a struct with a single field "run".
+    // Identity is a struct with a single field "runIdentity".
+    return task.run(k => Identity {getValue(k, store)}).runIdentity;
+}
+
+// Code on 79:11
+//
+// Definition 3.1 (Correctness)
+//
+// build :: Build c i k v
+// tasks :: Tasks c k v
+// key :: k
+// store, result :: Store i k v
+// result = build tasks key store
+//
+// The build result is correct if the following two conditions hold:
+// • result and store agree on inputs, that is, for all input keys k ∈ I :
+//     getValue k result == getValue k store.
+//   In other words, no inputs were corrupted during the build.
+// • The result is consistent with the tasks, i.e. for all non-input keys k ∈ O, the result of
+//   recomputing the corresponding task matches the value stored in the result:
+//     getValue k result == compute task result.
+
+let build : Build<C, I, K, V>;
+let tasks : Tasks<C, K, V>;
+let key : K;
+let store : Store<I, K, V>;
+let result : Store<I, K, V> = build(tasks, key, store);
+
+      getValue(k, result) == getValue(k, store)
+      getValue(k, result) == compute(task, result)
+
+// Code on 79:12
+//
+// dependencies :: Task Applicative k v -> [k]
+// dependencies task = getConst $ run task (\k -> Const [k])
+//
+// λ> dependencies $ fromJust $ sprsh1 "B1"
+// ["A1","A2"]
+// λ> dependencies $ fromJust $ sprsh1 "B2"
+// ["B1"]
+fn dependencies(task : Task<Applicative, K, V>) -> Vec<K> {
+    return task.run(k => Const{vec![k]}).getConst;
+}
+// // unwrap() asserts that the value matches Some(x) and extracts x
+// >>> dependencies(spreadsheet("B1").unwrap())
+// ["A1", "A2"]
+// >>> dependencies(spreadsheet("B2").unwrap())
+// ["B1"]
+
+// Code on 79:12
+// import Control.Monad.Writer
+// track :: Monad m => Task Monad k v -> (k -> m v) -> m (v, [(k, v)])
+// track task fetch = runWriterT $ run task trackingFetch
+//   where
+//     trackingFetch :: k -> WriterT [(k, v)] m v
+//     trackingFetch k = do v <- lift (fetch k); tell [(k, v)]; return v
+//
+use control::monad::writer::*;
+fn track<M: Monad>(task : Task<Monad, K, V>, fetch : Fn(K) -> M<V>) -> M<(V, Vec<(K, V)>)> {
+    // "Writer" may be thought of as a logging mechanism, where "tell" records
+    // something in the log.
+    let trackingFetch : Fn(K) -> WriterT<Vec<(K, V)>, M, V> =
+        k => {
+            let v = fetch(k);
+            tell(vec![(k, v)]);
+            return v;
+        };
+    let taskoutput: WriterT<Vec<(K, V)> M, V> = task.run(trackingFetch);
+    // WriterT is a struct with a single field called runWriterT.
+    return taskoutput.runWriterT;
+}
+
+// REPL output on 79:13
+// λ> fetchIO k = do putStr (k ++ ": "); read <$> getLine
+// λ> track (fromJust $ sprsh2 "B1") fetchIO
+// C1: 1
+// B2: 10
+// (10,[("C1",1),("B2",10)])
+// λ> track (fromJust $ sprsh2 "B1") fetchIO
+// C1: 2
+// A2: 20
+// (20,[("C1",2),("A2",20)])
+>>> let fetchIO = (k => {print(k + ": "); return readLine();});
+>>> track(spreadsheet2("B1").unwrap(), fetchIO)
+C1: 1
+B2: 10
+(10,[("C1",1),("B2",10)])
+>>> track(spreadsheet2("B2").unwrap(), fetchIO)
+C1: 2
+A2: 20
+(20,[("C1",2),("A2",20)])
+
+// Code on 79:14
+//
+// recordVT :: k -> Hash v -> [(k, Hash v)] -> VT k v -> VT k v
+// verifyVT :: (Monad m, Eq k, Eq v) => k -> Hash v -> (k -> m (Hash v)) -> VT k v -> m Bool
+//
+// {Comment} Maybe the type signatures have been written all in 1 line due
+// to space restrictions in the paper; people usually don't format long
+// signatures like this.
+fn recordVT(key : K, hash : Hash<V>, trace : Vec<(K, Hash<V>)>, store : VT<K, V>)
+            -> VT<K, V>;
+
+fn verifyVT(key : K, hash : Hash<V>, give_name_TODO : Fn(K) -> M<V>) -> M<Bool>
+  where M: Monad, K: Eq, V: Eq
+
+// Code on 79:15
+//
+// recordCT :: k -> v -> [(k, Hash v)] -> CT k v -> CT k v
+// constructCT :: (Monad m, Eq k, Eq v) => k -> (k -> m (Hash v)) -> CT k v -> m [v]
+
+fn recordCT(key : K, val : V, trace : Vec<(K, Hash<V>)>, store : CT<K, V>) -> CT<K, V>;
+
+fn constructCT(key : K, give_name_TODO : Fn(K) -> M<Hash<V>>, store : CT<K, V>) -> M<Vec<V>>
+    where M: Monad, K: Eq, V: Eq;
+
+// Code on 79:15
+//
+// data Trace k v r = Trace { key :: k, depends :: [(k, Hash v)], result :: r }
+//
+struct Trace<K, V, R> {
+    key : K,
+    depends : Vec<(K, Hash<V>)>,
+    result : R,
+}
+
+// Code on 79:16
+// type Scheduler c i ir k v = Rebuilder c ir k v -> Build c i k v
+// type Rebuilder c   ir k v = k -> v -> Task c k v -> Task (MonadState ir) k v
+//
+// Repeated from earlier
+
+type Scheduler<C, I, IR, K, V> = Fn(Rebuilder<C, IR, K, V>) -> Build<C, I, K, V>;
+type Rebuilder<C,    IR, K, V> = Fn(K, V, Task<C, K, V>) -> Task<MonadState<IR>, K, V>;
+
+// Fig 7. Code on 79:17
+//
+// -- Make build system; stores current time and file modification times
+// type Time = Integer
+// type MakeInfo k = (Time, Map k Time)
+//
+// make :: Ord k => Build Applicative (MakeInfo k) k v
+// make = topological modTimeRebuilder
+//
+// -- A task rebuilder based on file modification times
+// modTimeRebuilder :: Ord k => Rebuilder Applicative (MakeInfo k) k v
+// modTimeRebuilder key value task = Task $ \fetch -> do
+//   (now, modTimes) <- get
+//   let dirty = case Map.lookup key modTimes of
+//           Nothing -> True
+//           time -> any (\d -> Map.lookup d modTimes > time) (dependencies task)
+//   if not dirty then return value else do
+//     put (now + 1, Map.insert key now modTimes)
+//     run task fetch
+
+type Time = BigInt
+type MakeInfo<K> = (Time, Map<K, Time>)
+
+let make : Build<Applicative, MakeInfo<K>, K: Ord, V> =
+    (tasks, key, store) => { return topological(modTimeRebuilder, tasks, key, store); }
+
+let modTimeRebuilder : Rebuilder<Applicative, MakeInfo<K>, K: Ord, V> =
+    (key, value, task) => Task {
+        fetch => {
+            let (now : Time, modTimes : Map<K, Time>) = get();
+            let dirty = match modTimes.lookup(key) {
+                None => True,
+                time => dependencies(task).any(dep => modTimes.lookup(dep) > time)
+            }
+            if dirty {
+                put((now + 1, modTimes.insert(key, now))); // Save updated state.
+                return task.run(fetch);
+            } else {
+                return value;
+            }
+        }
+    }
+
+// Fig 7. Code on 79:17 (contd.)
+//
+//   -- A topological task scheduler
+// topological :: Ord k => Scheduler Applicative i i k v
+// topological rebuilder tasks target = execState $ mapM_ build order
+//   where
+//     build :: k -> State (Store i k v) ()
+//     build key = case tasks key of
+//       Nothing -> return ()
+//       Just task -> do
+//         store <- get
+//         let value = getValue key store
+//             newTask :: Task (MonadState i) k v
+//             newTask = rebuilder key value task
+//             fetch :: k -> State i v
+//             fetch k = return (getValue k store)
+//         newValue <- liftStore (run newTask fetch)
+//         modify $ putValue key newValue
+//     order = topSort (reachable dep target)
+//     dep k = case tasks k of { Nothing -> []; Just task -> dependencies task }
+//
+// {Comment} As Rust doesn't have currying-by-default, I've tried to make the
+// signatures match up with the Rust-y signatures, so the implementation looks
+// a bit weird.
+let topological : Scheduler<Applicative, I, I, K: Ord, V> =
+    rebuilder => {
+        return (tasks, target : K, startStore) => {
+            let build : Fn(K) -> State<Store<I, K, V>, ()> =
+                key => match tasks(key) {
+                    None => { return (); },
+                    Some(task) => {
+                        store = get();
+                        let value = getValue(key, store);
+                        let newTask : Task<MonadState<I>, K, V> = rebuilder(key, value, task);
+                        let fetch : Fn(K) -> State<I, V> =
+                            k => { return getValue(k, store); };
+                    }
+                    let newValue = liftStore(newTask.run(fetch));
+                    modify(store => putValue(key, newValue, store));
+                };
+            let order : Vec<K> = topSort(reachable(depsOf, target));
+            let depsOf : Fn(K) -> Vec<K> =
+                key => match tasks(key) {
+                    None => vec![],
+                    Some(task) => dependencies(task),
+                };
+            // mapM is similar to map except that applying map will give
+            // Vec<State<S, A>> whereas applying mapM will give State<S, Vec<A>> by
+            // threading the state sequentially, which can then be executed with an
+            // initial store to give a final store.
+            return execState(mapM(build, order), startStore);
+        };
+    };
+
+// Fig 7. Code on 79:17 (contd.)
+//
+// -- Standard graph algorithms (implementation omitted)
+// reachable :: Ord k => (k -> [k]) -> k -> Graph k
+// topSort :: Ord k => Graph k -> [k] -- Throws error on a cyclic graph
+//
+// -- Expand the scope of visibility of a stateful computation
+// liftStore :: State i a -> State (Store i k v) a
+// liftStore x = do
+//   (a, newInfo) <- gets (runState x . getInfo)
+//   modify (putInfo newInfo)
+//   return a
+fn reachable<K: Ord>(depsOf : Fn(K) -> Vec<K>, root : K) -> Graph<K>;
+fn topSort<K: Ord>(depGraph : Graph<K>) -> Vec<K>;
+
+fn liftStore(x : State<I, A>) -> State<Store<I, K, V>, A> {
+    let (a, newInfo) = gets(state => runState(x, getInfo(state)));
+    modify(state => putInfo(newInfo, state));
+    return a;
+}
