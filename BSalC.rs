@@ -22,7 +22,7 @@
 // For Haskellers:
 // ---------------
 // This translation is not term to term, and the types don't make sense
-// sometimes (e.g. <$> and <*> are elided in places); don't kill me.
+// sometimes (e.g. <$>, <*>, >>= and lifts are elided in places); don't kill me.
 // I've tried to do my best here. Also, you're surely better off reading the
 // paper directly; all the extra brackets here may make your head hurt.
 //
@@ -45,7 +45,7 @@
 //    Such a function will have type Fn(Foo, Bar) -> Qux
 //
 // 3. Type parameters are curried Foo<T, S> = Foo<T><S>.
-//    e.g. we can say that Vec (not Vec<T>) is a "mappable container".
+//    e.g. we can say that List (not List<T>) is a "mappable container".
 //
 // 4. Struct/Record definition uses an `=` sign instead of `:`
 //    e.g. { x = 10, y = 20 } instead of { x : 10, y : 10 }
@@ -73,7 +73,7 @@ let releaseTarRule = buildRuleFor(
     // The argument to the lambda is ignored (using JS-style lambda syntax).
     _ => {
         need(["release.txt"]);
-        let files: Vec<String> = readFile("release.txt").splitLines();
+        let files: List<String> = readFile("release.txt").splitLines();
         need(files);
         return system("tar", ["-cf", "release.tar"] + files);
     });
@@ -242,7 +242,7 @@ type Tasks<C, K, V> = Fn(K) -> Option<Task<C, K, V>>
 // sprsh1   "B1" = Just $ Task $ \fetch -> ((+) <$> fetch "A1" <*> fetch "A2")
 // sprsh1   "B2" = Just $ Task $ \fetch -> ((*2) <$> fetch "B1")
 // sprsh1   _ = Nothing
-let spreadsheet1 : Tasks<Applicative, String, BigInt> =
+let spreadsheet1 : Tasks<Applicative, String, Integer> =
     cellname => {
         match cellname {
             "B1" => Some(Task{fetch => fetch("A1") + fetch("A2")}),
@@ -326,7 +326,7 @@ let busy : Build<Applicative, (), K: Eq, V> =
 //     c2 <- fetch "C1"
 //     if c1 == 1 then fetch "A1" else fetch "B1"
 // sprsh2 _ = Nothing
-let spreadsheet2 : Tasks<Monad, String, BigInt> =
+let spreadsheet2 : Tasks<Monad, String, Integer> =
     cellname => match cellname {
         "B1" => Some(Task{
             fetch => {
@@ -388,8 +388,8 @@ let result : Store<I, K, V> = build(tasks, key, store);
 // ["A1","A2"]
 // λ> dependencies $ fromJust $ sprsh1 "B2"
 // ["B1"]
-fn dependencies(task : Task<Applicative, K, V>) -> Vec<K> {
-    return task.run(k => Const{vec![k]}).getConst;
+fn dependencies(task : Task<Applicative, K, V>) -> List<K> {
+    return task.run(k => Const{list![k]}).getConst;
 }
 // // unwrap() asserts that the value matches Some(x) and extracts x
 // >>> dependencies(spreadsheet("B1").unwrap())
@@ -406,16 +406,16 @@ fn dependencies(task : Task<Applicative, K, V>) -> Vec<K> {
 //     trackingFetch k = do v <- lift (fetch k); tell [(k, v)]; return v
 //
 use control::monad::writer::*;
-fn track<M: Monad>(task : Task<Monad, K, V>, fetch : Fn(K) -> M<V>) -> M<(V, Vec<(K, V)>)> {
+fn track<M: Monad>(task : Task<Monad, K, V>, fetch : Fn(K) -> M<V>) -> M<(V, List<(K, V)>)> {
     // "Writer" may be thought of as a logging mechanism, where "tell" records
     // something in the log.
-    let trackingFetch : Fn(K) -> WriterT<Vec<(K, V)>, M, V> =
+    let trackingFetch : Fn(K) -> WriterT<List<(K, V)>, M, V> =
         k => {
             let v = fetch(k);
-            tell(vec![(k, v)]);
+            tell(list![(k, v)]);
             return v;
         };
-    let taskoutput: WriterT<Vec<(K, V)> M, V> = task.run(trackingFetch);
+    let taskoutput: WriterT<List<(K, V)> M, V> = task.run(trackingFetch);
     // WriterT is a struct with a single field called runWriterT.
     return taskoutput.runWriterT;
 }
@@ -448,7 +448,7 @@ A2: 20
 // {Comment} Maybe the type signatures have been written all in 1 line due
 // to space restrictions in the paper; people usually don't format long
 // signatures like this.
-fn recordVT(key : K, hash : Hash<V>, trace : Vec<(K, Hash<V>)>, store : VT<K, V>)
+fn recordVT(key : K, hash : Hash<V>, trace : List<(K, Hash<V>)>, store : VT<K, V>)
             -> VT<K, V>;
 
 fn verifyVT(key : K, hash : Hash<V>, give_name_TODO : Fn(K) -> M<V>) -> M<Bool>
@@ -459,9 +459,9 @@ fn verifyVT(key : K, hash : Hash<V>, give_name_TODO : Fn(K) -> M<V>) -> M<Bool>
 // recordCT :: k -> v -> [(k, Hash v)] -> CT k v -> CT k v
 // constructCT :: (Monad m, Eq k, Eq v) => k -> (k -> m (Hash v)) -> CT k v -> m [v]
 
-fn recordCT(key : K, val : V, trace : Vec<(K, Hash<V>)>, store : CT<K, V>) -> CT<K, V>;
+fn recordCT(key : K, val : V, trace : List<(K, Hash<V>)>, store : CT<K, V>) -> CT<K, V>;
 
-fn constructCT(key : K, give_name_TODO : Fn(K) -> M<Hash<V>>, store : CT<K, V>) -> M<Vec<V>>
+fn constructCT(key : K, give_name_TODO : Fn(K) -> M<Hash<V>>, store : CT<K, V>) -> M<List<V>>
     where M: Monad, K: Eq, V: Eq;
 
 // Code on 79:15
@@ -470,7 +470,7 @@ fn constructCT(key : K, give_name_TODO : Fn(K) -> M<Hash<V>>, store : CT<K, V>) 
 //
 struct Trace<K, V, R> {
     key : K,
-    depends : Vec<(K, Hash<V>)>,
+    depends : List<(K, Hash<V>)>,
     result : R,
 }
 
@@ -503,7 +503,7 @@ type Rebuilder<C,    IR, K, V> = Fn(K, V, Task<C, K, V>) -> Task<MonadState<IR>,
 //     put (now + 1, Map.insert key now modTimes)
 //     run task fetch
 
-type Time = BigInt
+type Time = Integer
 type MakeInfo<K> = (Time, Map<K, Time>)
 
 let make : Build<Applicative, MakeInfo<K>, K: Ord, V> =
@@ -566,14 +566,14 @@ let topological : Scheduler<Applicative, I, I, K: Ord, V> =
                     let newValue = liftStore(newTask.run(fetch));
                     modify(store => putValue(key, newValue, store));
                 };
-            let order : Vec<K> = topSort(reachable(depsOf, target));
-            let depsOf : Fn(K) -> Vec<K> =
+            let order : List<K> = topSort(reachable(depsOf, target));
+            let depsOf : Fn(K) -> List<K> =
                 key => match tasks(key) {
-                    None => vec![],
+                    None => List::Nil,
                     Some(task) => dependencies(task),
                 };
-            // mapM is similar to map except that applying map will give
-            // Vec<State<S, A>> whereas applying mapM will give State<S, Vec<A>> by
+            // {Comment} mapM is similar to map except that applying map will give
+            // List<State<S, A>> whereas applying mapM will give State<S, List<A>> by
             // threading the state sequentially, which can then be executed with an
             // initial store to give a final store.
             return execState(mapM(build, order), startStore);
@@ -592,11 +592,313 @@ let topological : Scheduler<Applicative, I, I, K: Ord, V> =
 //   (a, newInfo) <- gets (runState x . getInfo)
 //   modify (putInfo newInfo)
 //   return a
-fn reachable<K: Ord>(depsOf : Fn(K) -> Vec<K>, root : K) -> Graph<K>;
-fn topSort<K: Ord>(depGraph : Graph<K>) -> Vec<K>;
+fn reachable<K: Ord>(depsOf : Fn(K) -> List<K>, root : K) -> Graph<K>;
+fn topSort<K: Ord>(depGraph : Graph<K>) -> List<K>;
 
 fn liftStore(x : State<I, A>) -> State<Store<I, K, V>, A> {
     let (a, newInfo) = gets(state => runState(x, getInfo(state)));
     modify(state => putInfo(newInfo, state));
     return a;
 }
+
+// Fig 8. Code on 79:19
+//
+// -- Excel build system; stores a dirty bit per key and calc chain
+// type Chain k = [k]
+// type ExcelInfo k = (k -> Bool, Chain k)
+//
+// excel :: Ord k => Build Monad (ExcelInfo k) k v
+// excel = restarting dirtyBitRebuilder
+//
+// -- A task rebuilder based on dirty bits
+// dirtyBitRebuilder :: Rebuilder Monad (k -> Bool) k v
+// dirtyBitRebuilder key value task = Task $ \fetch -> do
+//     isDirty <- get
+//     if isDirty key then run task fetch else return value
+
+type Chain<K> = List<K>
+type ExcelInfo<K> = (Fn(K) -> Bool, Chain<K>)
+
+let excel : Build<Monad, ExcelInfo<K>, K: Ord, V> = restarting(dirtyBitRebuilder);
+
+let dirtyBitRebuilder : Rebuilder<Monad, Fn(K) -> Bool, K, V> =
+    (key, value, task) => Task{
+        fetch => {
+            let isDirty = get();
+            if isDirty(key) { return task.run(fetch); } else { return value; }
+        }
+    };
+
+// Fig 8. Code on 79:19 (contd.)
+//
+// -- A restarting task scheduler
+// restarting :: Ord k => Scheduler Monad (ir, Chain k) ir k v
+// restarting rebuilder tasks target = execState $ do
+//     chain <- gets (snd . getInfo)
+//     newChain <- liftChain $ go Set.empty $ chain ++ [target | target `notElem` chain]
+//     modify $ mapInfo $ \(ir, _) -> (ir, newChain)
+//   where
+//     go :: Set k -> Chain k -> State (Store ir k v) (Chain k)
+//     go _    []         = return []
+//     go done (key:keys) = case tasks key of
+//       Nothing -> (key :) <$> go (Set.insert key done) keys
+//       Just task -> do
+//         store <- get
+//         let newTask :: Task (MonadState ir) k (Either k v)
+//             newTask = try $ rebuilder key (getValue key store) task
+//             fetch :: k -> State ir (Either k v)
+//             fetch k | k `Set.member` done = return $ Right (getValue k store)
+//                     | otherwise = return $ Left k
+//         result <- liftStore (run newTask fetch) -- liftStore is defined in Fig. 7
+//         case result of
+//           Left dep -> go done $ dep : filter (/= dep) keys ++ [key]
+//           Right newValue -> do modify $ putValue key newValue
+//                                (key :) <$> go (Set.insert key done) keys
+
+let restarting: Scheduler<Monad, (IR, Chain<K>), IR, K, V> =
+    (rebuilder, tasks, target) => {
+        let go : Fn(Set<K>, Chain<K>) -> State<Store<IR, K, V>, Chain<K>> =
+            (done, allKeys) => match allKeys {
+                List::Nil => { return List::Nil; }
+                List::Cons(key, keys) => match tasks(key) {
+                    None => { return list![key] + go(set::insert(key, done), keys); },
+                    Some(task) => {
+                        let store = get();
+                        let newTask : Task<MonadState<IR>, K, Result<K, V>> =
+                            try(rebuilder(key, getValue(key, store), task));
+                        let fetch : Fn(K) -> State<IR, Result<K, V>> =
+                            k => if done.contains(k) {
+                                return Ok(getValue(k, store));
+                            } else {
+                                return Err(k);
+                            }
+                        let result = liftStore(newTask.run(fetch));
+                        match result {
+                            Err(dep) => {
+                                // {Comment} Build the unbuilt dependency first
+                                // by putting it at the front of the list.
+                                let updatedKeys =
+                                    list![dep] + keys.filter(k => k != dep) + list![key];
+                                return go(done, updatedKeys);
+                            },
+                            Ok(newValue) => {
+                                modify(store => putValue(key, newValue, store));
+                                return list![key] + go(set::insert(key, done), keys);
+                            }
+                        }
+                    }
+                }
+            };
+        let mut chain = gets(state => getInfo(state).second);
+        if chain.doesNotContain(target) { chain.append(target); }
+        let newChain = go(set::empty, chain);
+        modify(state => mapInfo((ir, _) => (ir, newChain)));
+    };
+
+// Fig 8. Code on 79:19 (contd.)
+//
+// -- Convert a total task into a task that accepts a partial fetch callback
+// try :: Task (MonadState i) k v -> Task (MonadState i) k (Either e v)
+// try task = Task $ \fetch -> runExceptT $ run task (ExceptT . fetch)
+//
+// -- Expand the scope of visibility of a stateful computation (implementation omitted)
+// liftChain :: State (Store ir k v) a -> State (Store (ir, Chain [k]) k v) a
+fn try(task : Task<MonadState<I>, K, V>) -> Task<MonadState<I>, K, Result<E, V>> {
+    return Task { fetch => runExceptT(task.run(k => ExceptT(fetch(k)))) };
+}
+
+fn liftChain(action : State<Store<IR, K, V>, A>) ->
+    State<Store<(IR, Chain<List<K>>), K, V>, A>;
+
+// Fig 9. Code on 79:20
+//
+// -- Shake build system; stores verifying traces
+// shake :: (Ord k, Hashable v) => Build Monad (VT k v) k v
+// shake = suspending vtRebuilder
+//
+// -- A task rebuilder based on verifying traces
+// vtRebuilder :: (Eq k, Hashable v) => Rebuilder Monad (VT k v) k v
+// vtRebuilder key value task = Task $ \fetch -> do
+//     upToDate <- verifyVT key (hash value) (fmap hash . fetch) =<< get
+//     if upToDate then return value else do
+//         (newValue, deps) <- track task fetch
+//         modify $ recordVT key (hash newValue) [ (k, hash v) | (k, v) <- deps ]
+//         return newValue
+let shake : Build<Monad, VT<K, V>, K: Ord, V: Hashable> = suspending(vtRebuilder);
+
+let vtRebuilder : Rebuilder<Monad, VT<K, V>, K: Eq, V: Hashable> =
+    (key, value, task) => Task{
+        fetch => {
+            let upToDate = verifyVT(key, hash(value), k => fetch(k).map(hash), get());
+            if upToDate {
+                return value;
+            } else {
+                let (newValue, deps) = track(task, fetch);
+                modify(state => recordVT(
+                    key,
+                    hash(newValue),
+                    deps.map((k, v) => (k, hash(v))),
+                    state)
+                );
+                return newValue;
+            }
+        }
+    };
+
+// Fig 9. Code on 79:20 (contd.)
+// -- A suspending task scheduler
+// suspending :: Ord k => Scheduler Monad i i k v
+// suspending rebuilder tasks target store = fst $ execState (fetch target) (store, Set.empty)
+//   where
+//     fetch :: k -> State (Store i k v, Set k) v
+//     fetch key = do
+//         done <- gets snd
+//         case tasks key of
+//             Just task | key `Set.notMember` done -> do
+//                 value <- gets (getValue key . fst)
+//                 let newTask :: Task (MonadState i) k v
+//                     newTask = rebuilder key value task
+//                 newValue <- liftRun newTask fetch
+//                 modify $ \(s, d) -> (putValue key newValue s, Set.insert key d)
+//                 return newValue
+//             _ -> gets (getValue key . fst) -- fetch the existing value
+
+let suspending : Scheduler<Monad, I, I, K: Ord, V> =
+    (rebuilder, tasks, target, store) => {
+        let fetch : Fn(K) -> State<(Store<I, K, V>, Set<K>), V> =
+            key => {
+                // s.first gets the store, s.second gets the keys we've finished processing
+                let done = gets(s => s.second);
+                match tasks(key) {
+                    Some(task) if done.doesNotContain(key) => {
+                        let value = gets(s => getValue(key, s.first));
+                        let newTask : Task<MonadState<I>, K, V>
+                            = rebuilder(key, value, task);
+                        let newValue = liftRun(newTask, fetch);
+                        modify((s, d) => (putValue(key, newValue, s), Set.insert key d));
+                        return newValue;
+                    }
+                    _ => { return gets(s => getValue(key, s.first)); }
+                }
+            };
+        return execState(fetch(target), (store, set::empty)).first;
+    }
+
+// Fig 9. Code on 79:20 (contd.)
+//
+// -- Run a task using a callback that operates on a larger state (implementation omitted)
+// liftRun
+//   :: Task (MonadState i) k v
+//   -> (k -> State (Store i k v, Set k) v)
+//   -> State (Store i k v, Set k) v
+fn liftRun(
+    task: Task<MonadState<I>, K, V>,
+    fetch: Fn(K) -> State<(Store<I, K, V>, Set<K>), V>
+  ) -> State<(Store<I, K, V>, Set<K>), V>
+
+// Fig 10. Code on 79:22
+//
+// -- Bazel build system; stores constructive traces
+// bazel :: (Ord k, Hashable v) => Build Monad (CT k v) k v
+// bazel = restarting2 ctRebuilder -- implementation of ’restarting2’ is omitted (22 lines)
+//
+// -- A rebuilder based on constructive traces
+// ctRebuilder :: (Eq k, Hashable v) => Rebuilder Monad (CT k v) k v
+// ctRebuilder key value task = Task $ \fetch -> do
+//     cachedValues <- constructCT key (fmap hash . fetch) =<< get
+//     case cachedValues of
+//         _ | value `elem` cachedValues -> return value
+//         cachedValue:_ -> return cachedValue
+//         [] -> do (newValue, deps) <- track task fetch
+//                  modify $ recordCT key newValue [ (k, hash v) | (k, v) <- deps ]
+//                  return newValue
+
+let bazel : Build<Monad, CT<K, V>, K: Ord, V: Hashable> = restarting2(ctRebuilder)
+
+let ctRebuilder : Rebuilder<Monad, CT<K, V>, K: Ord, V: Hashable> =
+    (key, value, task) => Task{
+        fetch => {
+            let cachedValues = constructCT(key, k => fetch(k).map(hash), get());
+            if cachedValues.contains(value) {
+                return value;
+            }
+            match cachedValues {
+                List::Cons(cachedValue, _) => { return cachedValue; }
+                List::Nil => {
+                    let (newValue, deps) = track(task, fetch);
+                    modify(
+                        s => recordCT(key, newValue, deps.map((k, v) => (k, hash(v))), s)
+                    );
+                    return newValue;
+                }
+            }
+        }
+    };
+
+// Fig 10. Code on 79:22 (contd.)
+//
+// -- Cloud Shake build system, implementation of ’suspending’ is given in Fig. 9
+// cloudShake :: (Ord k, Hashable v) => Build Monad (CT k v) k v
+// cloudShake = suspending ctRebuilder
+//
+// -- CloudBuild build system, implementation of ’topological’ is given in Fig. 7
+// cloudBuild :: (Ord k, Hashable v) => Build Applicative (CT k v) k v
+// cloudBuild = topological (adaptRebuilder ctRebuilder)
+//
+// -- Convert a monadic rebuilder to the corresponding applicative one
+// adaptRebuilder :: Rebuilder Monad i k v -> Rebuilder Applicative i k v
+// adaptRebuilder rebuilder key value task = rebuilder key value $ Task $ run task
+//
+// -- Buck build system, implementation of ’topological’ is given in Fig. 7
+// buck :: (Ord k, Hashable v) => Build Applicative (DCT k v) k v
+// buck = topological (adaptRebuilder dctRebuilder)
+//
+// -- Rebuilder based on deep constructive traces, analogous to ’ctRebuilder’
+// dctRebuilder :: (Eq k, Hashable v) => Rebuilder Monad (DCT k v) k v
+//
+// -- Nix build system, implementation of ’suspending’ is given in Fig. 9
+// nix :: (Ord k, Hashable v) => Build Monad (DCT k v) k v
+// nix = suspending dctRebuilder
+
+let cloudShake : Build<Monad, CT<K, V>, K, V>
+    = suspending(ctRebuilder);
+
+let cloudBuild : Build<Applicative, CT<K, V>, K, V>
+    = topological(adaptRebuilder(ctRebuilder));
+
+let adaptRebuilder : Fn(Rebuilder<Monad, I, K, V>) -> Rebuilder<Applicative, I, K, V> =
+    rebuilder => {
+        return (key, value, task) => rebuilder(key, value, Task(task.run));
+    };
+
+let buck : Build<Applicative, DCT<K, V>, K, V>
+    = topological(adaptRebuilder(dctRebuilder));
+
+let dctRebuilder : Rebuilder<Monad, DCT<K, V>, K: Eq, V: Hashable>;
+
+let nix : Build<Monad, DCT<K, V>, K, V>
+    = suspending(dctRebuilder);
+
+// Code on 79:24
+// sprsh3 :: Tasks MonadPlus String Integer
+// sprsh3 "B1" = Just $ Task $ \fetch -> (+) <$> fetch "A1" <*> (pure 1 <|> pure 2)
+// sprsh3 _ = Nothing
+let spreadsheet3 : Tasks<MonadPlus, String, Integer> =
+    k => match k {
+        // No easy translation here without going into details of Alternative/MonadPlus :(
+        "B1" => Some(Task{fetch => fetch("A1") + eitherOr(1, 2)}),
+        _ => None
+    };
+
+// Code on 79:25
+// sprsh4 "B1" = Just $ Task $ \fetch -> do
+//     formula <- fetch "B1-formula"
+//     evalFormula fetch formula
+let spreadsheet4 : Tasks<Monad, String, Integer> =
+    k => match k {
+        "B1" => Some(Task{fetch => {
+            let formula = fetch("B1-formula");
+            return evalFormula(fetch, formula);
+        }})
+        ... // skipped
+    };
