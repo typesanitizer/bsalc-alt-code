@@ -29,7 +29,8 @@
 // For Rustaceans:
 // ---------------
 // If you complain about not following Rust's casing/formatting conventions,
-// I will almost surely send you a glitter bomb.
+// I will almost surely send you a glitter bomb. I'm following Haskell
+// conventions so there's less conflict when reading the two side-by-side.
 //
 // Differences from ordinary Rust
 // ==============================
@@ -65,7 +66,7 @@
 //     need files
 //     system "tar" $ ["-cf", "release.tar"] ++ files
 
-let releaseTarRule = buildRuleFor(
+buildRuleFor(
     "release.tar",
     // The argument to the lambda is ignored (using JS-style lambda syntax).
     _ => {
