@@ -132,7 +132,7 @@ struct Task<C, K, V> {
 // the thing is given as input), and non-input keys (for things that need to be
 // computed based off input keys) are associated with Some(task).
 // (Section 3.2)
-type Tasks<C, K, V> = Fn(K) -> Option<Task<C, K, V>>
+type Tasks<C, K, V> = Fn(K) -> Option<Task<C, K, V>>;
 
 // Fig 5. Code on 79:7 (contd.)
 //
@@ -189,8 +189,8 @@ fn get() -> State<S, S>;
 fn gets(f: Fn(S) -> A) -> State<S, A>;
 fn put(astate: S) -> State<S, ()>;
 fn modify(statechange: Fn(S) -> S) -> State<S, ()>;
-fn  runState(val: State<S, A>, startState: S) -> (A, S)
-fn execState(val: State<S, A>, startState: S) ->     S
+fn  runState(val: State<S, A>, startState: S) -> (A, S);
+fn execState(val: State<S, A>, startState: S) ->     S;
 
 // -- Standard types from Data.Functor.Identity and Data.Functor.Const
 // newtype Identity a = Identity { runIdentity :: a }
@@ -229,15 +229,15 @@ impl Applicative<Const<M: Monoid>> {
 struct Task<C, K, V> {
     run: forall<F> Fn<F: C>(Fn(K) -> F<V>) -> F<V>,
 };
-type Tasks<C, K, V> = Fn(K) -> Option<Task<C, K, V>>
+type Tasks<C, K, V> = Fn(K) -> Option<Task<C, K, V>>;
 
 // Spreadsheet example
 //  A1: 10  B1: A1 + A2
 //  A2: 20  B2: B1 * 2
-// sprsh1   :: Tasks Applicative String Integer
-// sprsh1   "B1" = Just $ Task $ \fetch -> ((+) <$> fetch "A1" <*> fetch "A2")
-// sprsh1   "B2" = Just $ Task $ \fetch -> ((*2) <$> fetch "B1")
-// sprsh1   _ = Nothing
+// sprsh1 :: Tasks Applicative String Integer
+// sprsh1 "B1" = Just $ Task $ \fetch -> ((+) <$> fetch "A1" <*> fetch "A2")
+// sprsh1 "B2" = Just $ Task $ \fetch -> ((*2) <$> fetch "B1")
+// sprsh1 _    = Nothing
 let spreadsheet1: Tasks<Applicative, String, Integer> =
     cellname => {
         match cellname {
@@ -345,7 +345,7 @@ let spreadsheet2: Tasks<Monad, String, Integer> =
 fn compute(task: Task<Monad, K, V>, store: Store<I, K, V>) -> V {
     // Recall task is a struct with a single field "run".
     // Identity is a struct with a single field "runIdentity".
-    return task.run(k => Identity {getValue(k, store)}).runIdentity;
+    return task.run(k => Identity { runIdentity: getValue(k, store) }).runIdentity;
 }
 
 // Code on 79:11
@@ -388,9 +388,9 @@ fn dependencies(task: Task<Applicative, K, V>) -> List<K> {
     return task.run(k => Const { getConst: list![k] }).getConst;
 }
 // {Comment} unwrap() asserts that the value matches Some(x) and extracts x
->>> dependencies(spreadsheet("B1").unwrap())
+>>> dependencies(spreadsheet1("B1").unwrap())
 ["A1", "A2"]
->>> dependencies(spreadsheet("B2").unwrap())
+>>> dependencies(spreadsheet1("B2").unwrap())
 ["B1"]
 
 // Code on 79:12
@@ -447,8 +447,8 @@ A2: 20
 fn recordVT(key: K, hash: Hash<V>, trace: List<(K, Hash<V>)>, store: VT<K, V>)
             -> VT<K, V>;
 
-fn verifyVT(key: K, hash: Hash<V>, give_name_TODO: Fn(K) -> M<V>) -> M<Bool>
-  where M: Monad, K: Eq, V: Eq
+fn verifyVT(key: K, hash: Hash<V>, fetch: Fn(K) -> M<V>) -> M<Bool>
+  where M: Monad, K: Eq, V: Eq;
 
 // Code on 79:15
 //
@@ -457,7 +457,7 @@ fn verifyVT(key: K, hash: Hash<V>, give_name_TODO: Fn(K) -> M<V>) -> M<Bool>
 
 fn recordCT(key: K, val: V, trace: List<(K, Hash<V>)>, store: CT<K, V>) -> CT<K, V>;
 
-fn constructCT(key: K, give_name_TODO: Fn(K) -> M<Hash<V>>, store: CT<K, V>) -> M<List<V>>
+fn constructCT(key: K, fetch_hash: Fn(K) -> M<Hash<V>>, store: CT<K, V>) -> M<List<V>>
     where M: Monad, K: Eq, V: Eq;
 
 // Code on 79:15
@@ -499,11 +499,13 @@ type Rebuilder<C,    IR, K, V> = Fn(K, V, Task<C, K, V>) -> Task<MonadState<IR>,
 //     put (now + 1, Map.insert key now modTimes)
 //     run task fetch
 
-type Time = Integer
-type MakeInfo<K> = (Time, Map<K, Time>)
+type Time = Integer;
+type MakeInfo<K> = (Time, Map<K, Time>);
 
 let make: Build<Applicative, MakeInfo<K>, K: Ord, V> =
-    (tasks, key, store) => { return topological(modTimeRebuilder, tasks, key, store); }
+    (tasks, key, store) => {
+        return topological(modTimeRebuilder, tasks, key, store);
+    };
 
 let modTimeRebuilder: Rebuilder<Applicative, MakeInfo<K>, K: Ord, V> =
     (key, value, task) => Task {
@@ -520,7 +522,7 @@ let modTimeRebuilder: Rebuilder<Applicative, MakeInfo<K>, K: Ord, V> =
                 return value;
             }
         }
-    }
+    };
 
 // Fig 7. Code on 79:17 (contd.)
 //
@@ -612,10 +614,11 @@ fn liftStore(x: State<I, A>) -> State<Store<I, K, V>, A> {
 //     isDirty <- get
 //     if isDirty key then run task fetch else return value
 
-type Chain<K> = List<K>
-type ExcelInfo<K> = (Fn(K) -> Bool, Chain<K>)
+type Chain<K> = List<K>;
+type ExcelInfo<K> = (Fn(K) -> Bool, Chain<K>);
 
-let excel: Build<Monad, ExcelInfo<K>, K: Ord, V> = restarting(dirtyBitRebuilder);
+let excel: Build<Monad, ExcelInfo<K>, K, V> where K: Ord =
+    restarting(dirtyBitRebuilder);
 
 let dirtyBitRebuilder: Rebuilder<Monad, Fn(K) -> Bool, K, V> =
     (key, value, task) => Task {
@@ -778,7 +781,7 @@ let suspending: Scheduler<Monad, I, I, K: Ord, V> =
                 }
             };
         return execState(fetch(target), (store, set::empty)).first;
-    }
+    };
 
 // Fig 9. Code on 79:20 (contd.)
 //
@@ -790,7 +793,7 @@ let suspending: Scheduler<Monad, I, I, K: Ord, V> =
 fn liftRun(
     task: Task<MonadState<I>, K, V>,
     fetch: Fn(K) -> State<(Store<I, K, V>, Set<K>), V>
-  ) -> State<(Store<I, K, V>, Set<K>), V>
+  ) -> State<(Store<I, K, V>, Set<K>), V>;
 
 // Fig 10. Code on 79:22
 //
@@ -809,7 +812,8 @@ fn liftRun(
 //                  modify $ recordCT key newValue [ (k, hash v) | (k, v) <- deps ]
 //                  return newValue
 
-let bazel: Build<Monad, CT<K, V>, K: Ord, V: Hashable> = restarting2(ctRebuilder)
+let bazel: Build<Monad, CT<K, V>, K: Ord, V: Hashable> =
+    restarting2(ctRebuilder);
 
 let ctRebuilder: Rebuilder<Monad, CT<K, V>, K: Ord, V: Hashable> =
     (key, value, task) => Task {
@@ -883,7 +887,7 @@ let spreadsheet3: Tasks<MonadPlus, String, Integer> =
     k => match k {
         // No easy translation here without going into details of Alternative/MonadPlus :(
         "B1" => Some(Task { run: fetch => fetch("A1") + eitherOr(1, 2) }),
-        _ => None
+        _    => None
     };
 
 // Code on 79:25
